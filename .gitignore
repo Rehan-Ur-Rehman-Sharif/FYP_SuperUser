@@ -1,0 +1,7 @@
+FYDP-frontend/node_modules/
+FYDP-frontend/dist/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/db.sqlite3-shm
+backend/db.sqlite3-wal
