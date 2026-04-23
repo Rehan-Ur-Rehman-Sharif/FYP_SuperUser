@@ -116,7 +116,17 @@ const Admins = ({ data = [] }) => {
       setEditModal(false);
     } catch (error) {
       console.error("Failed to update organization admin:", error);
-      alert("Could not update admin. Ensure all RFID values are valid.");
+      const payload = error?.response?.data || {};
+      const invalidList = Array.isArray(payload?.invalid_rfids) ? payload.invalid_rfids : [];
+      const rfidMessage = Array.isArray(payload?.rfid) ? payload.rfid.join(", ") : payload?.rfid;
+
+      if (invalidList.length) {
+        alert(`Invalid RFID(s): ${invalidList.join(", ")}`);
+      } else if (rfidMessage) {
+        alert(rfidMessage);
+      } else {
+        alert("Could not update admin. Ensure all RFID values are valid.");
+      }
     }
   };
 

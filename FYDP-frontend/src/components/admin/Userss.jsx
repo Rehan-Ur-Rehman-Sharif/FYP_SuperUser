@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import orgAdminData from "../../data/OrgAdminData";
+import React, { useEffect, useState } from "react";
+import axios from "../../utils/axiosInstance";
 
 const Users = () => {
-  const [users, setUsers] = useState(orgAdminData.users);
+  const [users, setUsers] = useState([]);
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [viewModal, setViewModal] = useState(false);
@@ -13,28 +13,49 @@ const Users = () => {
     status: "",
   });
 
+  const fetchUsers = async () => {
+    try {
+      const { data } = await axios.get("/api/users/");
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      setUsers([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   // ✅ DELETE
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this user?")) return;
 
-    const updated = users.filter((u) => u.id !== id);
-    setUsers(updated);
+    try {
+      await axios.delete(`/api/users/${id}/`);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (error) {
+      console.error("Failed to remove user:", error);
+      alert("Could not remove user. Please try again.");
+    }
   };
 
   // ✅ UPDATE
-  const handleUpdate = () => {
-    const updated = users.map((u) =>
-      u.id === selectedUser.id
-        ? {
-            ...u,
-            role: editData.role,
-            status: editData.status,
-          }
-        : u
-    );
-
-    setUsers(updated);
-    setEditModal(false);
+  const handleUpdate = async () => {
+    if (!selectedUser) return;
+    try {
+      const payload = {
+        role: editData.role,
+        status: editData.status,
+      };
+      const { data } = await axios.patch(`/api/users/${selectedUser.id}/`, payload);
+      setUsers((prev) => prev.map((u) => (u.id === selectedUser.id ? data : u)));
+      setSelectedUser(data);
+      setEditModal(false);
+    } catch (error) {
+      console.error("Failed to update user:", error);
+      alert("Could not update user. Please try again.");
+    }
   };
 
   return (

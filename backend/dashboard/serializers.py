@@ -2,7 +2,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import EventAdmin, Event, Management, OrganizationAdmin, Student, Teacher
+from .models import EventAdmin, Event, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher
 
 
 class EventAdminSerializer(serializers.ModelSerializer):
@@ -88,3 +88,49 @@ class OrganizationAdminSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'organization': 'This organization already has an admin'})
 
         return OrganizationAdmin.objects.create(management=management, **validated_data)
+
+
+class SystemUserSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    sourceId = serializers.IntegerField()
+    kind = serializers.CharField()
+    name = serializers.CharField()
+    email = serializers.CharField(allow_blank=True, allow_null=True)
+    role = serializers.CharField()
+    organization = serializers.CharField(allow_blank=True, allow_null=True)
+    department = serializers.CharField(allow_blank=True, allow_null=True)
+    status = serializers.ChoiceField(choices=['online', 'offline'])
+
+
+class MeetingRequestSerializer(serializers.ModelSerializer):
+    date = serializers.DateField(source='preferred_date')
+    time = serializers.TimeField(source='preferred_time', format='%H:%M', input_formats=['%H:%M', '%H:%M:%S'])
+
+    class Meta:
+        model = MeetingRequest
+        fields = [
+            'id',
+            'organization',
+            'email',
+            'role',
+            'purpose',
+            'date',
+            'time',
+            'status',
+        ]
+
+
+class PaymentRecordSerializer(serializers.ModelSerializer):
+    dueDate = serializers.DateField(source='due_date')
+
+    class Meta:
+        model = PaymentRecord
+        fields = [
+            'id',
+            'organization',
+            'email',
+            'role',
+            'amount',
+            'dueDate',
+            'status',
+        ]

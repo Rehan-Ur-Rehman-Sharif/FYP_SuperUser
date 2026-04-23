@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import orgAdminData from "../../data/OrgAdminData";
+import React, { useEffect, useState } from "react";
+import axios from "../../utils/axiosInstance";
 
 const Payments = () => {
-  const [payments, setPayments] = useState(orgAdminData.payments);
+  const [payments, setPayments] = useState([]);
+  const [showModal, setShowModal] = useState(false);
 
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [viewModal, setViewModal] = useState(false);
@@ -13,36 +14,103 @@ const Payments = () => {
     dueDate: "",
     status: "",
   });
+  const [formData, setFormData] = useState({
+    organization: "",
+    email: "",
+    role: "",
+    amount: "",
+    dueDate: "",
+    status: "Pending",
+  });
+
+  const fetchPayments = async () => {
+    try {
+      const { data } = await axios.get("/api/payments/");
+      const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+      setPayments(list);
+    } catch (error) {
+      console.error("Failed to fetch payments:", error);
+      setPayments([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchPayments();
+  }, []);
 
   // ✅ DELETE
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this payment?")) return;
 
-    const updated = payments.filter((p) => p.id !== id);
-    setPayments(updated);
+    try {
+      await axios.delete(`/api/payments/${id}/`);
+      setPayments((prev) => prev.filter((p) => p.id !== id));
+    } catch (error) {
+      console.error("Failed to delete payment:", error);
+      alert("Could not remove payment. Please try again.");
+    }
   };
 
   // ✅ UPDATE
-  const handleUpdate = () => {
-    const updated = payments.map((p) =>
-      p.id === selectedPayment.id
-        ? {
-            ...p,
-            amount: Number(editData.amount),
-            dueDate: editData.dueDate,
-            status: editData.status,
-          }
-        : p
-    );
+  const handleUpdate = async () => {
+    if (!selectedPayment) return;
+    try {
+      const payload = {
+        amount: Number(editData.amount),
+        dueDate: editData.dueDate,
+        status: editData.status,
+      };
+      const { data } = await axios.patch(`/api/payments/${selectedPayment.id}/`, payload);
+      setPayments((prev) => prev.map((p) => (p.id === selectedPayment.id ? data : p)));
+      setSelectedPayment(data);
+      setEditModal(false);
+    } catch (error) {
+      console.error("Failed to update payment:", error);
+      alert("Could not update payment. Please verify amount, due date and status.");
+    }
+  };
 
-    setPayments(updated);
-    setEditModal(false);
+  const handleCreatePayment = async () => {
+    if (!formData.organization || !formData.email || !formData.role || !formData.amount || !formData.dueDate) {
+      return;
+    }
+
+    try {
+      const payload = {
+        organization: formData.organization,
+        email: formData.email,
+        role: formData.role,
+        amount: Number(formData.amount),
+        dueDate: formData.dueDate,
+        status: formData.status,
+      };
+      const { data } = await axios.post("/api/payments/", payload);
+      setPayments((prev) => [data, ...prev]);
+      setShowModal(false);
+      setFormData({
+        organization: "",
+        email: "",
+        role: "",
+        amount: "",
+        dueDate: "",
+        status: "Pending",
+      });
+    } catch (error) {
+      console.error("Failed to create payment:", error);
+      alert("Could not create payment. Please verify the form.");
+    }
   };
 
   return (
     <div className="table-container">
       <div className="table-header">
         <h3>Pending Payments</h3>
+        <button
+          className="primary-btn"
+          onClick={() => setShowModal(true)}
+        >
+          + Add Payment
+        </button>
       </div>
 
       <table>
@@ -140,6 +208,68 @@ const Payments = () => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ✅ CREATE MODAL */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Add New Payment</h2>
+              <button onClick={() => setShowModal(false)}>✕</button>
+            </div>
+
+            <div className="form-grid">
+              <input
+                name="organization"
+                placeholder="Organization"
+                value={formData.organization}
+                onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+              />
+              <input
+                name="email"
+                placeholder="Email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+              <input
+                name="role"
+                placeholder="Role"
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              />
+              <input
+                type="number"
+                placeholder="Amount"
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+              />
+              <input
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+              />
+              <select
+                className="full-width"
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="Paid">Paid</option>
+                <option value="Pending">Pending</option>
+                <option value="Overdue">Overdue</option>
+              </select>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-create" onClick={handleCreatePayment}>
+                Create Payment
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import orgAdminData from "../../data/OrgAdminData";
+import React, { useEffect, useState } from "react";
+import axios from "../../utils/axiosInstance";
 
 const Meetings = () => {
-  const [meetings, setMeetings] = useState(orgAdminData.meetings);
+  const [meetings, setMeetings] = useState([]);
+  const [showModal, setShowModal] = useState(false);
 
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [viewModal, setViewModal] = useState(false);
@@ -13,36 +14,106 @@ const Meetings = () => {
     time: "",
     status: "",
   });
+  const [formData, setFormData] = useState({
+    organization: "",
+    email: "",
+    role: "",
+    purpose: "",
+    date: "",
+    time: "",
+    status: "Pending",
+  });
+
+  const fetchMeetings = async () => {
+    try {
+      const { data } = await axios.get("/api/meetings/");
+      const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+      setMeetings(list);
+    } catch (error) {
+      console.error("Failed to fetch meetings:", error);
+      setMeetings([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchMeetings();
+  }, []);
 
   // ✅ DELETE
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this meeting?")) return;
 
-    const updated = meetings.filter((m) => m.id !== id);
-    setMeetings(updated);
+    try {
+      await axios.delete(`/api/meetings/${id}/`);
+      setMeetings((prev) => prev.filter((m) => m.id !== id));
+    } catch (error) {
+      console.error("Failed to delete meeting:", error);
+      alert("Could not remove meeting. Please try again.");
+    }
   };
 
   // ✅ UPDATE
-  const handleUpdate = () => {
-    const updated = meetings.map((m) =>
-      m.id === selectedMeeting.id
-        ? {
-            ...m,
-            date: editData.date,
-            time: editData.time,
-            status: editData.status,
-          }
-        : m
-    );
+  const handleUpdate = async () => {
+    if (!selectedMeeting) return;
+    try {
+      const payload = {
+        date: editData.date,
+        time: editData.time,
+        status: editData.status,
+      };
+      const { data } = await axios.patch(`/api/meetings/${selectedMeeting.id}/`, payload);
+      setMeetings((prev) => prev.map((m) => (m.id === selectedMeeting.id ? data : m)));
+      setSelectedMeeting(data);
+      setEditModal(false);
+    } catch (error) {
+      console.error("Failed to update meeting:", error);
+      alert("Could not update meeting. Please verify date/time/status.");
+    }
+  };
 
-    setMeetings(updated);
-    setEditModal(false);
+  const handleCreateMeeting = async () => {
+    if (!formData.organization || !formData.email || !formData.role || !formData.purpose || !formData.date || !formData.time) {
+      return;
+    }
+
+    try {
+      const payload = {
+        organization: formData.organization,
+        email: formData.email,
+        role: formData.role,
+        purpose: formData.purpose,
+        date: formData.date,
+        time: formData.time,
+        status: formData.status,
+      };
+      const { data } = await axios.post("/api/meetings/", payload);
+      setMeetings((prev) => [data, ...prev]);
+      setShowModal(false);
+      setFormData({
+        organization: "",
+        email: "",
+        role: "",
+        purpose: "",
+        date: "",
+        time: "",
+        status: "Pending",
+      });
+    } catch (error) {
+      console.error("Failed to create meeting:", error);
+      alert("Could not create meeting. Please verify the form.");
+    }
   };
 
   return (
     <div className="table-container">
       <div className="table-header">
         <h3>Meeting Requests</h3>
+        <button
+          className="primary-btn"
+          onClick={() => setShowModal(true)}
+        >
+          + Add Meeting
+        </button>
       </div>
 
       <table>
@@ -143,6 +214,73 @@ const Meetings = () => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ✅ CREATE MODAL */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Add New Meeting</h2>
+              <button onClick={() => setShowModal(false)}>✕</button>
+            </div>
+
+            <div className="form-grid">
+              <input
+                name="organization"
+                placeholder="Organization"
+                value={formData.organization}
+                onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+              />
+              <input
+                name="email"
+                placeholder="Email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+              <input
+                name="role"
+                placeholder="Role"
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              />
+              <input
+                name="purpose"
+                placeholder="Purpose"
+                value={formData.purpose}
+                onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
+              />
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              />
+              <input
+                type="time"
+                value={formData.time}
+                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+              />
+              <select
+                className="full-width"
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-create" onClick={handleCreateMeeting}>
+                Create Meeting
+              </button>
+            </div>
           </div>
         </div>
       )}
