@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -49,20 +50,19 @@ class Teacher(models.Model):
         managed = False
 
 
-class EventAdmin(models.Model):
-    STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('inactive', 'Inactive'),
-    ]
+class EventAdvisor(models.Model):
+    """Maps to Integration `events_eventadvisor`; advisor row is 1:1 with auth user."""
 
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='event_advisor',
+    )
     name = models.CharField(max_length=200)
-    email = models.EmailField()
-    organization = models.CharField(max_length=255)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'event_admin'
+        db_table = 'events_eventadvisor'
         managed = False
 
 
@@ -70,12 +70,12 @@ class Event(models.Model):
     title = models.CharField(max_length=200)
     event_date = models.DateField(null=True, blank=True)
     start_time = models.DateTimeField(null=True, blank=True)
-    event_admin = models.ForeignKey(
-        EventAdmin,
-        on_delete=models.SET_NULL,
+    organiser = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='dashboard_organised_events',
         null=True,
         blank=True,
-        related_name='managed_events',
     )
 
     class Meta:
@@ -107,11 +107,20 @@ class UserDirectoryMeta(models.Model):
         ('online', 'Online'),
         ('offline', 'Offline'),
     ]
+    ACCOUNT_STATUS_CHOICES = [
+        ('active', 'active'),
+        ('inactive', 'inactive'),
+    ]
 
     user_kind = models.CharField(max_length=50)
     source_id = models.PositiveIntegerField()
     role = models.CharField(max_length=50)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='offline')
+    account_status = models.CharField(
+        max_length=10,
+        choices=ACCOUNT_STATUS_CHOICES,
+        default='active',
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -126,7 +135,7 @@ class MeetingRequest(models.Model):
         ('Rejected', 'Rejected'),
     ]
 
-    organization = models.CharField(max_length=255)
+    organization = models.CharField(max_length=255, blank=True, default='')
     email = models.EmailField()
     role = models.CharField(max_length=100)
     purpose = models.TextField()
@@ -147,7 +156,7 @@ class PaymentRecord(models.Model):
         ('Overdue', 'Overdue'),
     ]
 
-    organization = models.CharField(max_length=255)
+    organization = models.CharField(max_length=255, blank=True, default='')
     email = models.EmailField()
     role = models.CharField(max_length=100)
     organization_admin = models.ForeignKey(
@@ -157,8 +166,8 @@ class PaymentRecord(models.Model):
         blank=True,
         related_name='payments',
     )
-    event_admin = models.ForeignKey(
-        'EventAdmin',
+    event_advisor = models.ForeignKey(
+        'EventAdvisor',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

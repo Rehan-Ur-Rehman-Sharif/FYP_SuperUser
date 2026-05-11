@@ -1,17 +1,23 @@
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import EventAdmin, Event, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher
+from .models import Event, EventAdvisor, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher, UserDirectoryMeta
+
+User = get_user_model()
 
 
-class EventAdminSerializer(serializers.ModelSerializer):
+class EventAdvisorSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(write_only=True, required=False)
+    organization = serializers.CharField(required=False, allow_blank=True, write_only=True)
     eventsManaged = serializers.SerializerMethodField()
     activeEvents = serializers.SerializerMethodField()
     joinDate = serializers.DateTimeField(source='created_at', format='%Y-%m-%d', read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
-        model = EventAdmin
+        model = EventAdvisor
         fields = [
             'id',
             'name',
@@ -23,17 +29,100 @@ class EventAdminSerializer(serializers.ModelSerializer):
             'joinDate',
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['email'] = (instance.user.email or '').strip() if getattr(instance, 'user_id', None) else ''
+        data['organization'] = ''
+        return data
+
+    def _account_meta(self, obj):
+        return UserDirectoryMeta.objects.filter(
+            user_kind='event_advisor',
+            source_id=obj.id,
+        ).first()
+
+    def get_status(self, obj):
+        meta = self._account_meta(obj)
+        if meta:
+            return meta.account_status or 'active'
+        return 'active'
+
     def get_eventsManaged(self, obj):
-        return Event.objects.filter(event_admin_id=obj.id).count()
+        uid = getattr(obj, 'user_id', None)
+        if uid is None:
+            return 0
+        return Event.objects.filter(organiser_id=uid).count()
 
     def get_activeEvents(self, obj):
+        uid = getattr(obj, 'user_id', None)
+        if uid is None:
+            return 0
         now = timezone.now()
         today = now.date()
-        return Event.objects.filter(
-            event_admin_id=obj.id
-        ).filter(
+        return Event.objects.filter(organiser_id=uid).filter(
             Q(event_date__gte=today) | Q(start_time__gte=now)
         ).count()
+
+    def create(self, validated_data):
+        validated_data.pop('organization', None)
+        email = (self.initial_data.get('email') or '').strip()
+        name = (validated_data.get('name') or '').strip()
+        if not email:
+            raise serializers.ValidationError({'email': 'This field is required'})
+        if not name:
+            raise serializers.ValidationError({'name': 'This field is required'})
+
+        user, _created = User.objects.get_or_create(
+            username=email,
+            defaults={
+                'email': email,
+                'first_name': name.split()[0] if name else '',
+            },
+        )
+        if user.email != email:
+            user.email = email
+            user.save(update_fields=['email'])
+
+        if EventAdvisor.objects.filter(user_id=user.id).exists():
+            raise serializers.ValidationError({'email': 'An event advisor already exists for this email'})
+
+        return EventAdvisor.objects.create(user=user, name=name)
+
+    def update(self, instance, validated_data):
+        validated_data.pop('organization', None)
+        email = self.initial_data.get('email')
+        if email is not None:
+            email = email.strip()
+            if email:
+                if User.objects.filter(username=email).exclude(pk=instance.user_id).exists():
+                    raise serializers.ValidationError({'email': 'This email is already in use'})
+                u = instance.user
+                u.username = email
+                u.email = email
+                u.save(update_fields=['username', 'email'])
+
+        status = self.initial_data.get('status')
+        if status is not None:
+            if status not in ('active', 'inactive'):
+                raise serializers.ValidationError({'status': 'Must be active or inactive'})
+            meta, _ = UserDirectoryMeta.objects.get_or_create(
+                user_kind='event_advisor',
+                source_id=instance.id,
+                defaults={
+                    'role': 'Event Admin',
+                    'status': 'offline',
+                    'account_status': status,
+                },
+            )
+            meta.account_status = status
+            meta.save(update_fields=['account_status', 'updated_at'])
+
+        name = validated_data.get('name')
+        if name is not None:
+            instance.name = name
+            instance.save(update_fields=['name'])
+
+        return instance
 
 
 class OrganizationAdminSerializer(serializers.ModelSerializer):

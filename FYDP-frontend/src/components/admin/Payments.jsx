@@ -71,14 +71,28 @@ const Payments = () => {
   };
 
   const handleCreatePayment = async () => {
-    if (!formData.organization || !formData.email || !formData.role || !formData.amount || !formData.dueDate) {
+    const missing = [];
+    if (!String(formData.email || "").trim()) missing.push("Email");
+    if (!String(formData.role || "").trim()) missing.push("Role");
+    const amt = Number(formData.amount);
+    if (
+      formData.amount === "" ||
+      formData.amount === null ||
+      !Number.isFinite(amt) ||
+      amt < 1
+    ) {
+      missing.push("Amount");
+    }
+    if (!formData.dueDate) missing.push("Due date");
+    if (missing.length) {
+      alert(`Please fill in: ${missing.join(", ")}`);
       return;
     }
 
     try {
       const payload = {
-        organization: formData.organization,
-        email: formData.email,
+        organization: String(formData.organization || "").trim(),
+        email: String(formData.email || "").trim(),
         role: formData.role,
         amount: Number(formData.amount),
         dueDate: formData.dueDate,

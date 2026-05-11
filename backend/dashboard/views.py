@@ -6,13 +6,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Event, EventAdmin, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher, UserDirectoryMeta
-from .serializers import EventAdminSerializer, MeetingRequestSerializer, OrganizationAdminSerializer, PaymentRecordSerializer, SystemUserSerializer
+from .models import EventAdvisor, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher, UserDirectoryMeta
+from .serializers import EventAdvisorSerializer, MeetingRequestSerializer, OrganizationAdminSerializer, PaymentRecordSerializer, SystemUserSerializer
 
 
-class EventAdminViewSet(viewsets.ModelViewSet):
-    queryset = EventAdmin.objects.all().order_by('-created_at')
-    serializer_class = EventAdminSerializer
+class EventAdvisorViewSet(viewsets.ModelViewSet):
+    queryset = EventAdvisor.objects.select_related('user').all().order_by('-created_at')
+    serializer_class = EventAdvisorSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
@@ -21,18 +21,17 @@ class EventAdminViewSet(viewsets.ModelViewSet):
         if search:
             queryset = queryset.filter(
                 Q(name__icontains=search) |
-                Q(email__icontains=search) |
-                Q(organization__icontains=search)
+                Q(user__email__icontains=search)
             )
         return queryset
 
     def perform_create(self, serializer):
-        event_admin = serializer.save()
+        advisor = serializer.save()
         PaymentRecord.objects.create(
-            organization=event_admin.organization or '',
-            email=event_admin.email,
+            organization='',
+            email=(advisor.user.email or '').strip(),
             role='Event Admin',
-            event_admin_id=event_admin.id,
+            event_advisor_id=advisor.id,
             amount=0,
             due_date=timezone.now().date(),
             status='Pending',
@@ -142,6 +141,7 @@ class SystemUserViewSet(viewsets.ViewSet):
             'student': 'Student',
             'teacher': 'Teacher',
             'organization_admin': 'Admin',
+            'event_advisor': 'Event Admin',
             'event_admin': 'Event Admin',
         }
         return mapping.get(kind, 'User')
@@ -161,8 +161,8 @@ class SystemUserViewSet(viewsets.ViewSet):
         if kind == 'organization_admin':
             management = getattr(obj, 'management', None)
             return management.Management_name if management else ''
-        if kind == 'event_admin':
-            return obj.organization or ''
+        if kind in ('event_advisor', 'event_admin'):
+            return ''
         return ''
 
     def _base_record(self, kind, source_id, name, email, organization, department):
@@ -233,15 +233,15 @@ class SystemUserViewSet(viewsets.ViewSet):
                 )
             )
 
-        for ea in EventAdmin.objects.all():
+        for ea in EventAdvisor.objects.select_related('user').all():
             users.append(
                 self._apply_meta(
                     self._base_record(
-                        'event_admin',
+                        'event_advisor',
                         ea.id,
                         ea.name,
-                        ea.email,
-                        self._organization_name('event_admin', ea),
+                        ea.user.email if ea.user_id else '',
+                        self._organization_name('event_advisor', ea),
                         '',
                     )
                 )
@@ -310,11 +310,10 @@ class SystemUserViewSet(viewsets.ViewSet):
                 Student.objects.filter(management=management).update(management=None)
                 Teacher.objects.filter(management=management).update(management=None)
                 admin_obj.delete()
-        elif kind == 'event_admin':
-            event_admin = EventAdmin.objects.filter(id=source_id).first()
-            if event_admin:
-                Event.objects.filter(event_admin_id=event_admin.id).update(event_admin=None)
-                event_admin.delete()
+        elif kind in ('event_advisor', 'event_admin'):
+            advisor = EventAdvisor.objects.filter(id=source_id).first()
+            if advisor:
+                advisor.delete()
         elif kind == 'student':
             Student.objects.filter(student_id=source_id).delete()
         elif kind == 'teacher':
@@ -380,7 +379,7 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
         organization = (self.request.data.get('organization') or '').strip()
 
         organization_admin = None
-        event_admin = None
+        event_advisor = None
 
         if role == 'admin':
             organization_admin = OrganizationAdmin.objects.filter(
@@ -390,14 +389,11 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
             if organization_admin is None:
                 organization_admin = OrganizationAdmin.objects.filter(email__iexact=email).first()
         elif role == 'event admin':
-            event_admin = EventAdmin.objects.filter(
-                email__iexact=email,
-                organization__iexact=organization,
+            event_advisor = EventAdvisor.objects.filter(
+                user__email__iexact=email,
             ).first()
-            if event_admin is None:
-                event_admin = EventAdmin.objects.filter(email__iexact=email).first()
 
         serializer.save(
             organization_admin=organization_admin,
-            event_admin=event_admin,
+            event_advisor=event_advisor,
         )

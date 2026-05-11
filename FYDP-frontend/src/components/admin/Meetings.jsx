@@ -72,13 +72,20 @@ const Meetings = () => {
   };
 
   const handleCreateMeeting = async () => {
-    if (!formData.organization || !formData.email || !formData.role || !formData.purpose || !formData.date || !formData.time) {
+    const missing = [];
+    if (!String(formData.email || "").trim()) missing.push("Email");
+    if (!String(formData.role || "").trim()) missing.push("Role");
+    if (!String(formData.purpose || "").trim()) missing.push("Purpose");
+    if (!formData.date) missing.push("Date");
+    if (!formData.time) missing.push("Time");
+    if (missing.length) {
+      alert(`Please fill in: ${missing.join(", ")}`);
       return;
     }
 
     try {
       const payload = {
-        organization: formData.organization,
+        organization: String(formData.organization || "").trim(),
         email: formData.email,
         role: formData.role,
         purpose: formData.purpose,
