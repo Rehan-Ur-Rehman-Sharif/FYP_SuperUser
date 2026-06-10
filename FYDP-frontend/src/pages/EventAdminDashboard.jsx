@@ -4,7 +4,7 @@ import eventsData from "../data/EventData";
 import EventCard from "../components/events/EventCard";
 import CreateEventModal from "../components/events/CreateEventModal";
 import EventModal from "../components/events/EventModal";
-import "../styles/eventAdmin.css";
+import "../styles/eventadmin.css";
 import { Calendar } from "lucide-react";
 
 
