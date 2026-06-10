@@ -1,6 +1,12 @@
 import axios from "axios";
+import summaryApi from "../common";
 
-const axiosInstance = axios.create();
+// Derive the backend domain from the summaryApi login URL so we have one source of truth
+const backendDomain = summaryApi.login.url.replace("/api/login", "");
+
+const axiosInstance = axios.create({
+  baseURL: backendDomain,
+});
 
 // Attach access token to every request automatically
 axiosInstance.interceptors.request.use((config) => {
@@ -29,7 +35,7 @@ axiosInstance.interceptors.response.use(
 
     try {
       const currentUser = JSON.parse(localStorage.getItem("currentUser")) || {};
-      const { data } = await axios.post("/api/token/refresh/", {
+      const { data } = await axios.post(`${backendDomain}/api/token/refresh/`, {
         refresh: currentUser.refresh,
       });
 
