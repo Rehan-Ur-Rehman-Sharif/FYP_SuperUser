@@ -10,12 +10,12 @@ import {
   User
 } from "lucide-react";
 
-import Overview from "../components/Admin/Overview";
-import Admins from "../components/Admin/Admins";
-import EventAdmins from "../components/Admin/EventAdmins";
-import Meetings from "../components/Admin/Meetings";
-import Payments from "../components/Admin/Payments";
-import Userss from "../components/Admin/Userss";
+import Overview from "../components/admin/Overview";
+import Admins from "../components/admin/Admins";
+import EventAdmins from "../components/admin/EventAdmins";
+import Meetings from "../components/admin/Meetings";
+import Payments from "../components/admin/Payments";
+import Userss from "../components/admin/Userss";
 
 
 const AdminDashboard = () => {
