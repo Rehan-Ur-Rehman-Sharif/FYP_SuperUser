@@ -182,3 +182,20 @@ class PaymentRecord(models.Model):
 
     class Meta:
         db_table = 'dashboard_payment_record'
+
+
+class EventParticipant(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='dashboard_event_participant',
+    )
+    display_name = models.CharField(max_length=200, blank=True)
+    phone = models.CharField(max_length=30, blank=True, default='')
+    age = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'events_eventparticipant'
+        managed = False
+

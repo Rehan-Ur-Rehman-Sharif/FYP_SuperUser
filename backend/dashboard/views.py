@@ -5,9 +5,38 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
 
-from .models import EventAdvisor, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher, UserDirectoryMeta
+from .models import EventAdvisor, Management, MeetingRequest, OrganizationAdmin, PaymentRecord, Student, Teacher, UserDirectoryMeta, EventParticipant
 from .serializers import EventAdvisorSerializer, MeetingRequestSerializer, OrganizationAdminSerializer, PaymentRecordSerializer, SystemUserSerializer
+
+
+def sync_organization_admins():
+    managements_without_admin = Management.objects.exclude(
+        Management_id__in=OrganizationAdmin.objects.values_list('management_id', flat=True)
+    )
+    if managements_without_admin.exists():
+        with transaction.atomic():
+            for m in managements_without_admin:
+                email = (m.email or '').strip()
+                if not email or OrganizationAdmin.objects.filter(email=email).exists():
+                    email = f"org_admin_{m.Management_id}@example.com"
+                
+                counter = 1
+                base_email = email
+                while OrganizationAdmin.objects.filter(email=email).exists():
+                    parts = base_email.split('@')
+                    email = f"{parts[0]}_{counter}@{parts[1]}"
+                    counter += 1
+
+                OrganizationAdmin.objects.get_or_create(
+                    management=m,
+                    defaults={
+                        'email': email,
+                        'status': 'active',
+                    }
+                )
+
 
 
 class EventAdvisorViewSet(viewsets.ModelViewSet):
@@ -44,6 +73,7 @@ class OrganizationAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
+        sync_organization_admins()
         queryset = super().get_queryset()
         search = (self.request.query_params.get('search') or '').strip()
         if search:
@@ -397,3 +427,26 @@ class PaymentRecordViewSet(viewsets.ModelViewSet):
             organization_admin=organization_admin,
             event_advisor=event_advisor,
         )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def dashboard_stats_view(request):
+    sync_organization_admins()
+    
+    total_admins = OrganizationAdmin.objects.count()
+    event_admins = EventAdvisor.objects.count()
+    participants = EventParticipant.objects.count()
+    students = Student.objects.count()
+    teachers = Teacher.objects.count()
+    pending_meetings = MeetingRequest.objects.filter(status='Pending').count()
+    
+    return Response({
+        'totalAdmins': total_admins,
+        'eventAdmins': event_admins,
+        'participants': participants,
+        'students': students,
+        'teachers': teachers,
+        'pendingMeetings': pending_meetings,
+    })
+
