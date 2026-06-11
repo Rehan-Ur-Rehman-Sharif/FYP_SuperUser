@@ -14,8 +14,7 @@ def prune_events_event_event_admin_refs(apps, schema_editor):
     tables = conn.introspection.table_names(cursor)
     if 'events_event' not in tables:
         return
-    cursor.execute('PRAGMA table_info(events_event)')
-    cols = [r[1] for r in cursor.fetchall()]
+    cols = [col[0] for col in conn.introspection.get_table_description(cursor, 'events_event')]
     if 'event_admin_id' not in cols:
         return
     cursor.execute('UPDATE events_event SET event_admin_id = NULL')
@@ -28,16 +27,28 @@ def ensure_eventadvisor_table_and_import_event_admin(apps, schema_editor):
     tables = conn.introspection.table_names(cursor)
 
     if 'events_eventadvisor' not in tables:
-        cursor.execute(
-            '''
-            CREATE TABLE "events_eventadvisor" (
-                "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
-                "name" varchar(200) NOT NULL,
-                "created_at" datetime NOT NULL,
-                "user_id" bigint NOT NULL UNIQUE REFERENCES "auth_user" ("id")
+        if conn.vendor == 'postgresql':
+            cursor.execute(
+                '''
+                CREATE TABLE "events_eventadvisor" (
+                    "id" bigserial NOT NULL PRIMARY KEY,
+                    "name" varchar(200) NOT NULL,
+                    "created_at" timestamp with time zone NOT NULL,
+                    "user_id" bigint NOT NULL UNIQUE REFERENCES "auth_user" ("id")
+                )
+                '''
             )
-            '''
-        )
+        else:
+            cursor.execute(
+                '''
+                CREATE TABLE "events_eventadvisor" (
+                    "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    "name" varchar(200) NOT NULL,
+                    "created_at" datetime NOT NULL,
+                    "user_id" bigint NOT NULL UNIQUE REFERENCES "auth_user" ("id")
+                )
+                '''
+            )
 
     if 'event_admin' not in tables:
         return
@@ -96,7 +107,7 @@ def backfill_payment_event_advisor(apps, schema_editor):
             FROM events_eventadvisor ea
             INNER JOIN auth_user u ON u.id = ea.user_id
             INNER JOIN event_admin e ON e.id = %s
-            WHERE LOWER(IFNULL(e.email, '')) = LOWER(IFNULL(u.email, ''))
+            WHERE LOWER(COALESCE(e.email, '')) = LOWER(COALESCE(u.email, ''))
             ''',
             [pr.event_admin_id],
         )
