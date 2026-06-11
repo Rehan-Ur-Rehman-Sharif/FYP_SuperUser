@@ -1,6 +1,6 @@
 const backendDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:8080'
-    : 'https://trustmark-superuser-backend.azurewebsites.net';
+    : 'https://trustmark-superuser-backend-dyf5cmd8g5hqa6ax.malaysiawest-01.azurewebsites.net';
 
 const summaryApi={
     signUp:{
